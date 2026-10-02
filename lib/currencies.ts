@@ -68,9 +68,7 @@ export const CURRENCIES: Record<string, CurrencyInfo> = {
   UYU: { code: 'UYU', name: 'Uruguayan Peso', symbol: '$U', rate: 40 },
 }
 
-// Country → currency. Arabic is the official, always-on language of the site;
-// the country mapping only adjusts the display currency so prices adapt to the
-// visitor's region (SAR is the universal fallback).
+// Country → language + currency, so the site adapts to the visitor's region.
 const COUNTRY_LOCALE: Record<string, LocaleConfig> = {
   // MENA / Arabic-speaking
   SA: { lang: 'ar', currency: 'SAR' },
@@ -219,14 +217,14 @@ export function countryFromTimezone(timeZone?: string): string | undefined {
 }
 
 /**
- * Map an ISO country code to the visitor's locale. Arabic is the official
- * language and is always returned regardless of country; only the currency is
- * adjusted per region (SAR as the universal fallback).
+ * Map an ISO country code to the visitor's language and currency. Unknown
+ * visitors (no country at all) get Arabic + SAR; a detected country without a
+ * specific mapping gets English + USD.
  */
 export function localeForCountry(countryCode: string | undefined): LocaleConfig {
   const code = (countryCode ?? '').trim().toUpperCase()
-  const currency = COUNTRY_LOCALE[code]?.currency ?? FALLBACK_LOCALE.currency
-  return { lang: 'ar', currency }
+  if (!code) return FALLBACK_LOCALE
+  return COUNTRY_LOCALE[code] ?? { lang: 'en', currency: 'USD' }
 }
 
 /** A "generic" interface used by the provider before a final decision. */

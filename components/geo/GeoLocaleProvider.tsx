@@ -22,6 +22,15 @@ import { t as translate, type TKey } from '@/lib/i18n'
 import type { ServerLocale } from '@/lib/locale-server'
 
 const OVERRIDE_KEY = 'ff_locale_lang'
+const CURRENCY_KEY = 'ff_locale_currency'
+
+function writeCookie(name: string, value: string, maxAge = 31536000) {
+  try {
+    document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=${maxAge}; samesite=lax`
+  } catch {
+    // ignore cookie errors
+  }
+}
 
 export interface LocaleValue {
   status: 'loading' | 'ready'
@@ -90,9 +99,10 @@ export function GeoLocaleProvider({
     document.documentElement.setAttribute('dir', dirOf(state.lang))
   }, [state.lang])
 
-  // Apply a stored override and refine the country/currency. First paint is
-  // already correct (server-seeded); then an instant timezone check flips the
-  // language, and a background IP lookup refines the currency further.
+  // The server already resolved language + currency from the edge geo data, so
+  // the first paint is final. Only when the server could not tell the country
+  // (no geo data) do we refine on the client, and we persist the result in a
+  // cookie so every following page is rendered correctly on the server.
   useEffect(() => {
     let cancelled = false
 
@@ -103,25 +113,36 @@ export function GeoLocaleProvider({
     } catch {
       override = undefined
     }
-    if (override) setState((s) => ({ ...s, lang: override }))
+    if (override && override !== seeded.current?.lang) {
+      setState((s) => ({ ...s, lang: override }))
+      writeCookie(OVERRIDE_KEY, override)
+    }
 
     // A manually chosen currency survives page reloads and beats geo-detection.
     let currencyOverride: string | undefined
     try {
-      const stored = globalThis.localStorage?.getItem('ff_locale_currency')
+      const stored = globalThis.localStorage?.getItem(CURRENCY_KEY)
       currencyOverride = stored && CURRENCIES[stored] ? stored : undefined
     } catch {
       currencyOverride = undefined
     }
-    if (currencyOverride) setState((s) => ({ ...s, currency: currencyOverride }))
+    if (currencyOverride && currencyOverride !== seeded.current?.currency) {
+      setState((s) => ({ ...s, currency: currencyOverride }))
+      writeCookie(CURRENCY_KEY, currencyOverride)
+    }
+
+    if (seeded.current?.countryCode) {
+      setState((s) => (s.status === 'ready' ? s : { ...s, status: 'ready' }))
+      return
+    }
 
     const setLocale = (lang: Lang, currency: string, countryCode: string) => {
       if (cancelled) return
-      setState((s) => ({ ...s, lang: override ?? lang, currency: currencyOverride ?? currency, countryCode }))
+      writeCookie('ff_country', countryCode, 60 * 60 * 24 * 30)
+      setState((s) => ({ ...s, status: 'ready', lang: override ?? lang, currency: currencyOverride ?? currency, countryCode }))
     }
 
     // Instant, network-free signal: the browser timezone (e.g. Africa/Casablanca → MA).
-    // This reflects the visitor's real physical location, so it is authoritative.
     const tz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : undefined
     const tzCountry = countryFromTimezone(tz)
 
@@ -146,19 +167,20 @@ export function GeoLocaleProvider({
   const setLang = useCallback((lang: Lang) => {
     try {
       globalThis.localStorage?.setItem(OVERRIDE_KEY, lang)
-      document.cookie = `${OVERRIDE_KEY}=${lang}; path=/; max-age=31536000; samesite=lax`
     } catch {
       // ignore storage errors
     }
+    writeCookie(OVERRIDE_KEY, lang)
     setState((s) => ({ ...s, lang }))
   }, [])
 
   const setCurrency = useCallback((currency: string) => {
     try {
-      globalThis.localStorage?.setItem('ff_locale_currency', currency)
+      globalThis.localStorage?.setItem(CURRENCY_KEY, currency)
     } catch {
       // ignore storage errors
     }
+    writeCookie(CURRENCY_KEY, currency)
     setState((s) => ({ ...s, currency }))
   }, [])
 
