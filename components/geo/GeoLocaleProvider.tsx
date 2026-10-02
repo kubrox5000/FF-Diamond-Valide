@@ -22,6 +22,29 @@ import { t as translate, type TKey } from '@/lib/i18n'
 import type { ServerLocale } from '@/lib/locale-server'
 
 const OVERRIDE_KEY = 'ff_locale_lang'
+const CURRENCY_KEY = 'ff_locale_currency'
+/** Country the visitor was in when they picked a language/currency manually. */
+const OVERRIDE_COUNTRY_KEY = 'ff_locale_country'
+
+const isLang = (v: string | undefined): v is Lang =>
+  v === 'en' || v === 'ar' || v === 'fr' || v === 'es' || v === 'pt'
+
+function rememberOverrideCountry(countryCode: string | undefined) {
+  if (!countryCode) return
+  globalThis.localStorage?.setItem(OVERRIDE_COUNTRY_KEY, countryCode)
+  document.cookie = `${OVERRIDE_COUNTRY_KEY}=${countryCode}; path=/; max-age=31536000; samesite=lax`
+}
+
+function clearOverrides() {
+  try {
+    for (const key of [OVERRIDE_KEY, CURRENCY_KEY, OVERRIDE_COUNTRY_KEY]) {
+      globalThis.localStorage?.removeItem(key)
+      document.cookie = `${key}=; path=/; max-age=0; samesite=lax`
+    }
+  } catch {
+    // ignore storage errors
+  }
+}
 
 export interface LocaleValue {
   status: 'loading' | 'ready'
@@ -77,6 +100,7 @@ export function GeoLocaleProvider({
   initialLocale?: ServerLocale
 }) {
   const seeded = useRef(initialLocale)
+  const countryRef = useRef<string | undefined>(initialLocale?.countryCode)
   const [state, setState] = useState<State>({
     status: seeded.current ? 'ready' : 'loading',
     lang: seeded.current?.lang ?? 'ar',
@@ -90,53 +114,61 @@ export function GeoLocaleProvider({
     document.documentElement.setAttribute('dir', dirOf(state.lang))
   }, [state.lang])
 
-  // Apply a stored override and refine the country/currency. First paint is
-  // already correct (server-seeded); then an instant timezone check flips the
-  // language, and a background IP lookup refines the currency further.
+  // Resolve the visitor's country (IP first, timezone as a fallback), then
+  // apply any manual override made in that same country. Overrides made in a
+  // different country are dropped so the site re-adapts to the new location.
   useEffect(() => {
     let cancelled = false
 
-    let override: Lang | undefined
-    try {
-      const stored = globalThis.localStorage?.getItem(OVERRIDE_KEY)
-      override = (stored === 'en' || stored === 'ar' || stored === 'fr' || stored === 'es' || stored === 'pt') ? stored as Lang : undefined
-    } catch {
-      override = undefined
+    const readStored = (key: string) => {
+      try {
+        return globalThis.localStorage?.getItem(key) ?? undefined
+      } catch {
+        return undefined
+      }
     }
-    if (override) setState((s) => ({ ...s, lang: override }))
 
-    // A manually chosen currency survives page reloads and beats geo-detection.
-    let currencyOverride: string | undefined
-    try {
-      const stored = globalThis.localStorage?.getItem('ff_locale_currency')
-      currencyOverride = stored && CURRENCIES[stored] ? stored : undefined
-    } catch {
-      currencyOverride = undefined
-    }
-    if (currencyOverride) setState((s) => ({ ...s, currency: currencyOverride }))
-
-    const setLocale = (lang: Lang, currency: string, countryCode: string) => {
+    // `final` marks the definitive country; only then are stale overrides cleared.
+    const apply = (countryCode: string | undefined, final: boolean) => {
       if (cancelled) return
-      setState((s) => ({ ...s, lang: override ?? lang, currency: currencyOverride ?? currency, countryCode }))
+      const base = countryCode ? localeForCountry(countryCode) : undefined
+
+      const overrideCountry = readStored(OVERRIDE_COUNTRY_KEY)
+      const sameCountry = !countryCode || overrideCountry === countryCode
+      if (!sameCountry && final) clearOverrides()
+
+      const storedLang = sameCountry ? readStored(OVERRIDE_KEY) : undefined
+      const lang = isLang(storedLang) ? storedLang : base?.lang
+      const storedCurrency = sameCountry ? readStored(CURRENCY_KEY) : undefined
+      const currency = storedCurrency && CURRENCIES[storedCurrency] ? storedCurrency : base?.currency
+
+      if (countryCode) countryRef.current = countryCode
+      setState((s) => ({
+        ...s,
+        status: 'ready',
+        lang: lang ?? s.lang,
+        currency: currency ?? s.currency,
+        countryCode: countryCode ?? s.countryCode,
+      }))
     }
 
-    // Instant, network-free signal: the browser timezone (e.g. Africa/Casablanca → MA).
-    // This reflects the visitor's real physical location, so it is authoritative.
+    // The edge already resolved the IP country: authoritative, no lookup needed.
+    if (seeded.current?.countryFromIp && seeded.current.countryCode) {
+      apply(seeded.current.countryCode, true)
+      return () => {
+        cancelled = true
+      }
+    }
+
+    // Otherwise apply the timezone guess instantly, then refine via IP lookup
+    // (the IP reflects VPNs / travel, the timezone does not).
     const tz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : undefined
-    const tzCountry = countryFromTimezone(tz)
-
-    if (tzCountry) {
-      const base = localeForCountry(tzCountry)
-      setLocale(base.lang, base.currency, tzCountry)
-    } else {
-      // Background: only refine via IP lookup when the timezone gives no country.
-      void (async () => {
-        const countryCode = await detectCountryCode()
-        if (!countryCode) return
-        const base = localeForCountry(countryCode)
-        setLocale(base.lang, base.currency, countryCode)
-      })()
-    }
+    const guess = countryFromTimezone(tz) ?? seeded.current?.countryCode
+    apply(guess, false)
+    void (async () => {
+      const countryCode = await detectCountryCode()
+      apply(countryCode ?? guess, true)
+    })()
 
     return () => {
       cancelled = true
@@ -147,6 +179,7 @@ export function GeoLocaleProvider({
     try {
       globalThis.localStorage?.setItem(OVERRIDE_KEY, lang)
       document.cookie = `${OVERRIDE_KEY}=${lang}; path=/; max-age=31536000; samesite=lax`
+      rememberOverrideCountry(countryRef.current)
     } catch {
       // ignore storage errors
     }
@@ -155,7 +188,8 @@ export function GeoLocaleProvider({
 
   const setCurrency = useCallback((currency: string) => {
     try {
-      globalThis.localStorage?.setItem('ff_locale_currency', currency)
+      globalThis.localStorage?.setItem(CURRENCY_KEY, currency)
+      rememberOverrideCountry(countryRef.current)
     } catch {
       // ignore storage errors
     }
