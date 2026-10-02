@@ -66,9 +66,9 @@ export function SiteNav() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-border/60 bg-background/80 backdrop-blur-md">
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
-        <Link href="/" className="flex items-center gap-2 group" translate="no">
-          <SiteBrand />
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-3 py-3 sm:px-6">
+        <Link href="/" className="flex min-w-0 items-center gap-2 group" translate="no">
+          <SiteBrand nameClass="hidden truncate text-lg font-extrabold tracking-tight text-gradient min-[420px]:inline" />
         </Link>
 
         <nav className="hidden items-center gap-1 lg:flex">
@@ -77,19 +77,19 @@ export function SiteNav() {
           ))}
         </nav>
 
-        <div className="hidden items-center gap-2 lg:flex">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           <CurrencySwitch />
           <LangSwitch />
-        </div>
 
-        <button
-          onClick={() => setOpen((v) => !v)}
-          className="grid h-11 w-11 place-items-center rounded-lg border border-border lg:hidden touch-manipulation"
+          <button
+            onClick={() => setOpen((v) => !v)}
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-border lg:hidden touch-manipulation"
           aria-label={t('nav_menu')}
           aria-expanded={open}
         >
-          {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </button>
+            {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+        </div>
       </div>
 
       <div
