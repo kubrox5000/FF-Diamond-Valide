@@ -73,17 +73,17 @@ export function CurrencySwitch({ className }: { className?: string }) {
         onClick={() => setOpen((v) => !v)}
         aria-label="Switch currency"
         aria-expanded={open}
-        className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-secondary/40 px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary/70 touch-manipulation"
+        className="inline-flex h-10 items-center gap-1 rounded-xl border border-primary/40 bg-primary/10 px-2 text-sm font-semibold text-foreground shadow-sm transition-colors hover:bg-primary/20 touch-manipulation sm:gap-1.5 sm:px-3"
         translate="no"
       >
-        <Coins className="h-4 w-4 text-muted-foreground" />
+        <Coins className="h-4 w-4 shrink-0 text-primary" />
         <span className="hidden sm:inline">{current.flag} {current.code}</span>
-        <span className="sm:hidden">{current.flag}</span>
+        <span className="sm:hidden">{current.flag} {current.code}</span>
         <ChevronDown className={cn('h-3.5 w-3.5 text-muted-foreground transition-transform', open && 'rotate-180')} />
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-1.5 max-h-80 w-56 overflow-y-auto overscroll-contain rounded-xl border border-border bg-card shadow-xl">
+        <div className="absolute end-0 top-full z-50 mt-1.5 max-h-80 w-56 overflow-y-auto overscroll-contain rounded-xl border border-border bg-card shadow-xl">
           {CURRENCIES.map((c) => (
             <button
               key={c.code}
@@ -97,7 +97,7 @@ export function CurrencySwitch({ className }: { className?: string }) {
             >
               <span className="text-base">{c.flag}</span>
               <span className="w-9 shrink-0 font-mono text-xs font-bold">{c.code}</span>
-              <span className="flex-1 text-left text-xs text-muted-foreground">{c.label}</span>
+              <span className="flex-1 text-start text-xs text-muted-foreground">{c.label}</span>
               {currency === c.code && <Check className="h-3.5 w-3.5 shrink-0 text-primary" />}
             </button>
           ))}

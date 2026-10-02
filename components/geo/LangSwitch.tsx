@@ -38,16 +38,16 @@ export function LangSwitch({ className }: { className?: string }) {
         onClick={() => setOpen((v) => !v)}
         aria-label="Switch language"
         aria-expanded={open}
-        className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-secondary/40 px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary/70 touch-manipulation"
+        className="inline-flex h-10 items-center gap-1 rounded-xl border border-primary/40 bg-primary/10 px-2 text-sm font-semibold text-foreground shadow-sm transition-colors hover:bg-primary/20 touch-manipulation sm:gap-1.5 sm:px-3"
       >
-        <Languages className="h-4 w-4 text-muted-foreground" />
+        <Languages className="h-4 w-4 shrink-0 text-primary" />
         <span translate="no" className="hidden sm:inline">{current.flag} {current.label}</span>
-        <span translate="no" className="sm:hidden">{current.flag}</span>
+        <span translate="no" className="sm:hidden">{current.flag} {current.code.toUpperCase()}</span>
         <ChevronDown className={cn('h-3.5 w-3.5 text-muted-foreground transition-transform', open && 'rotate-180')} />
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-1.5 w-40 overflow-hidden rounded-xl border border-border bg-card shadow-xl">
+        <div className="absolute end-0 top-full z-50 mt-1.5 w-40 overflow-hidden rounded-xl border border-border bg-card shadow-xl">
           {LANGUAGES.map((l) => (
             <button
               key={l.code}
@@ -60,7 +60,7 @@ export function LangSwitch({ className }: { className?: string }) {
               translate="no"
             >
               <span className="text-base">{l.flag}</span>
-              <span className="flex-1 text-left">{l.label}</span>
+              <span className="flex-1 text-start">{l.label}</span>
               {lang === l.code && <Check className="h-3.5 w-3.5 text-primary" />}
             </button>
           ))}
